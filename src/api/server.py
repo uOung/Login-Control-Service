@@ -72,6 +72,9 @@ async def login(req: LoginReq, request: Request):
         )
     return {"ok": ok, "result": result}
 
+@app.get("/health")
+def health(): return {"ok": True}
+
 @app.get("/metrics")
 def metrics():
     """
