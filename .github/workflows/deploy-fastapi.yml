@@ -20,6 +20,7 @@ jobs:
       # (선택) zip로 묶어서 올리면 App Service가 Oryx로 requirements.txt 설치
       - name: Create deployment package
         run: |
+          cd $GITHUB_WORKSPACE
           zip -r app.zip src requirements.txt
           echo "==== zip content check ===="
           unzip -l app.zip
