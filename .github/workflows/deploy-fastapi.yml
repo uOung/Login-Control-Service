@@ -21,7 +21,8 @@ jobs:
       - name: Create deployment package
         run: |
           cd $GITHUB_WORKSPACE
-          zip -r app.zip src requirements.txt
+          # zip 안에 루트에 src/와 requirements.txt만 들어가도록 지정
+          zip -r app.zip ./src ./requirements.txt
           echo "==== zip content check ===="
           unzip -l app.zip
 
