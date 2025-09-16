@@ -1,9 +1,13 @@
 import time
 import random
 import requests
+import os
+
+from dotenv import load_dotenv
+load_dotenv()  # .env 자동 로드
 
 # ===== 설정 =====
-BASE = "http://127.0.0.1:8080"  # FastAPI 서버 주소
+BASE = os.environ.get("TRAFFIC_BASE_URL", "http://127.0.0.1:8080").rstrip("/")
 EMAIL_OK = "user@example.com"
 PASS_OK = "pass123"
 CHANNELS = ["WEB", "MYKT", "MEMBERSHIP"]

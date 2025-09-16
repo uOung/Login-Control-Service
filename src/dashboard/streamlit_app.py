@@ -5,6 +5,12 @@ from datetime import datetime
 import pandas as pd
 import requests
 import streamlit as st
+import os
+
+from dotenv import load_dotenv
+load_dotenv()  # .env 자동 로드
+
+API_BASE_URL = os.environ.get("API_BASE_URL", "http://127.0.0.1:8080").rstrip("/")
 
 st.set_page_config(page_title="Login Anomaly Monitor (Python + Azure AI)", layout="wide")
 st.title("🔎 Login Anomaly Monitor (Python + Azure AI Summary)")
@@ -12,7 +18,7 @@ st.title("🔎 Login Anomaly Monitor (Python + Azure AI Summary)")
 # ---- Controls ----
 with st.sidebar:
     st.header("Settings")
-    base = st.text_input("API Base URL", value="http://127.0.0.1:8080", help="예: http://127.0.0.1:8080")
+    base = st.text_input("API Base URL", value=API_BASE_URL, help="예: http://127.0.0.1:8080")
     interval = st.slider("Auto refresh (sec)", 3, 30, 7)
     manual = st.button("🔄 Refresh now")
 
