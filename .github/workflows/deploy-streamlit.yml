@@ -1,0 +1,33 @@
+name: Deploy Streamlit to Azure Web App
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - "src/**"
+      - "requirements.txt"
+      - ".github/workflows/deploy-streamlit.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create deployment package
+        run: |
+          cd $GITHUB_WORKSPACE
+          # zip 안에 루트에 src/와 requirements.txt만 들어가도록 지정
+          zip -r app.zip ./src ./requirements.txt
+          echo "==== zip content check ===="
+          unzip -l app.zip
+
+      - name: Deploy to Azure Web App (streamlit-login-control)
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: "streamlit-login-control"
+          publish-profile: ${{ secrets.STREAMLIT_PUBLISH_PROFILE }}
+          package: "app.zip"
