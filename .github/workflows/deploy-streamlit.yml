@@ -17,10 +17,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Create deployment package (zip)
+      - name: Create deployment package
         run: |
-          zip -r app.zip src requirements.txt
-          ls -al
+          cd $GITHUB_WORKSPACE
+          # zip 안에 루트에 src/와 requirements.txt만 들어가도록 지정
+          zip -r app.zip ./src ./requirements.txt
+          echo "==== zip content check ===="
+          unzip -l app.zip
 
       - name: Deploy to Azure Web App (streamlit-login-control)
         uses: azure/webapps-deploy@v3
