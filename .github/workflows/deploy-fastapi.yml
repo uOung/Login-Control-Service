@@ -18,10 +18,11 @@ jobs:
         uses: actions/checkout@v4
 
       # (선택) zip로 묶어서 올리면 App Service가 Oryx로 requirements.txt 설치
-      - name: Create deployment package (zip)
+      - name: Create deployment package
         run: |
           zip -r app.zip src requirements.txt
-          ls -al
+          echo "==== zip content check ===="
+          unzip -l app.zip
 
       - name: Deploy to Azure Web App (login-control)
         uses: azure/webapps-deploy@v3
