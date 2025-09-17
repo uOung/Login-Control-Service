@@ -18,11 +18,25 @@ from ai.summarize import summarize_alerts
 from notify.webhook import notify_slack_blocks
 
 # ====== DB 경로 설정 (src/data/events.sqlite) ======
-BASE_DIR = Path(__file__).resolve().parents[1]  # src/
-DB_PATH = BASE_DIR / "data" / "events.sqlite"
-DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+DEF_AZURE_DIR = Path("/home/site")
+if DEF_AZURE_DIR.exists():
+    default_dir = DEF_AZURE_DIR / "data"
+else:
+    default_dir = Path(__file__).resolve().parents[1] / "data"   # src/data
 
-engine = create_engine(f"sqlite:///{DB_PATH}", future=True)
+DB_DIR = Path(os.getenv("DB_DIR", default_dir))
+DB_DIR.mkdir(parents=True, exist_ok=True)
+
+DB_PATH = Path(os.getenv("DB_PATH", DB_DIR / "events.sqlite"))
+
+engine = create_engine(
+    f"sqlite:///{DB_PATH}", 
+    future=True,
+    connect_args={"check_same_thread": False},
+    pool_pre_ping=True,
+)
+
+print(f"[startup] Using DB at: {DB_PATH}", flush=True)
 
 # ====== 초기 테이블 생성 ======
 with engine.begin() as conn:
