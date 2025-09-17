@@ -4,7 +4,6 @@ from pydantic import BaseModel
 from sqlalchemy import create_engine, text
 from datetime import datetime, timezone
 from pathlib import Path
-from contextlib import asynccontextmanager
 import hashlib
 import os
 import random
@@ -41,6 +40,9 @@ with engine.begin() as conn:
       latency_ms INTEGER
     );
     """)
+
+# ====== FastAPI 앱 ======
+app = FastAPI(title="Login API · Anomaly Detection + Azure AI Summary")
 
 # ====== 백그라운드 더미 트래픽 생성기 ======
 def _insert_dummy_once(engine, success_ratio: float = 0.85) -> None:
@@ -94,12 +96,12 @@ def _bg_traffic_loop(engine, stop_event: threading.Event) -> None:
             print(f"[bg-traffic] error: {e}", flush=True)
             time.sleep(base_sleep)
 
-# ====== FastAPI lifespan: startup/shutdown 훅 ======
+# ====== on_event: startup/shutdown ======
 _stop_event: threading.Event | None = None
 _bg_thread: threading.Thread | None = None
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
+@app.on_event("startup")
+def _start_bg_traffic():
     global _stop_event, _bg_thread
     _stop_event = threading.Event()
 
@@ -112,13 +114,10 @@ async def lifespan(app: FastAPI):
     else:
         print("[bg-traffic] disabled (set ENABLE_BG_TRAFFIC=1 to enable)", flush=True)
 
-    # --- startup 완료 ---
-    yield
-    # --- shutdown 시작 ---
+@app.on_event("shutdown")
+def _stop_bg_traffic():
     if _stop_event:
         _stop_event.set()
-
-app = FastAPI(title="Login API · Anomaly Detection + Azure AI Summary", lifespan=lifespan)
 
 # ====== 모델 ======
 class LoginReq(BaseModel):
