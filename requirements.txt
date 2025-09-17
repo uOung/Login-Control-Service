@@ -1,13 +1,17 @@
-fastapi==0.115.0
-uvicorn[standard]==0.30.6
-sqlalchemy==2.0.35
-pydantic==2.9.2
-scikit-learn==1.5.2
+fastapi==0.110.0
+uvicorn[standard]==0.30.1
+SQLAlchemy==2.0.31
+pydantic==2.8.2
+
+# 과학 스택: App Service에서 휠 존재하는 조합
+numpy==1.26.4
 pandas==2.2.2
-numpy==2.1.1
-streamlit==1.38.0
+scipy==1.11.4
+scikit-learn==1.4.2
+
+streamlit==1.36.0
 plotly==5.24.1
 APScheduler==3.10.4
-requests
-python-dotenv
-gunicorn
+requests==2.32.3
+python-dotenv==1.0.1
+gunicorn==21.2.0
