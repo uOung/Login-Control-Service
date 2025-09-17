@@ -20,12 +20,13 @@ st.title("🔐 Login Control Dashboard")
 # ---- Controls ----
 with st.sidebar:
     st.header("Settings")
-    base = st.text_input("API Base URL", value=ENV_API_BASE or "", help="예: https://login-control.azurewebsites.net")
-    interval = st.slider("Auto refresh (sec)", 3, 60, 10)
-    manual = st.button("🔄 Refresh now")
-
-# 자동 새로고침 (무한 루프/ sleep 대신)
-st.markdown(f"<meta http-equiv='refresh' content='{interval}'>", unsafe_allow_html=True)
+    base = st.text_input(
+        "API Base URL",
+        value=ENV_API_BASE or "",
+        help="예: https://login-control.azurewebsites.net",
+        placeholder="https://<your-fastapi-app>.azurewebsites.net",
+    )
+    manual = st.button("🔄 Refresh now")  # 수동 새로고침만 유지
 
 status = st.empty()
 kpi_area = st.empty()
@@ -95,7 +96,7 @@ def render(data: dict):
 
     # Alerts
     with alerts_area.container():
-        st.subheader("Recent Alerts")
+        st.subheader("🚨 Recent Alerts")
         alerts = list(reversed(data.get("alerts", [])))
         if not alerts:
             st.write("No alerts.")
@@ -111,7 +112,7 @@ def render(data: dict):
 
     # AI Summary
     with summary_area.container():
-        st.subheader("AI 요약 (from API)")
+        st.subheader("🔍 AI 요약")
         summary = data.get("summary")
         if summary:
             st.markdown(summary)
@@ -119,15 +120,13 @@ def render(data: dict):
             st.caption("요약 없음 (서버 측 환경변수 미설정 또는 데이터 부족/호출 실패)")
 
 # =========================
-# Run (single pass per rerun)
+# Run (manual refresh only)
 # =========================
 try:
     if manual:
-        st.cache_data.clear()
-        manual = False
+        st.cache_data.clear()  # 캐시만 지우고 같은 실행 내에서 다시 가져옴
     data = fetch_metrics_from_api(base)
     render(data)
-    status.info(f"Last update: {datetime.now().strftime('%H:%M:%S')} · Source: {base or '(unset)'}")
 except Exception as e:
     status.error(f"Fetch error: {e}")
     st.stop()
