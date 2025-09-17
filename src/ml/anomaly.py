@@ -12,13 +12,40 @@ def _read_last_minutes(engine, minutes=60):
             conn, params={"since": since}
         )
     if df.empty:
-        return pd.DataFrame(columns=["ts","channel","result","fingerprint","user_hash","latency_ms"])
-    df["ts"] = pd.to_datetime(df["ts"], utc=True)
+        return pd.DataFrame({
+            "ts": pd.Series(dtype="datetime64[ns, UTC]"),
+            "channel": pd.Series(dtype="object"),
+            "result": pd.Series(dtype="object"),
+            "fingerprint": pd.Series(dtype="object"),
+            "user_hash": pd.Series(dtype="object"),
+            "latency_ms": pd.Series(dtype="float64"),
+        })
+
+    df["ts"] = pd.to_datetime(df["ts"], errors="coerce", utc=True)
+    df["latency_ms"] = pd.to_numeric(df.get("latency_ms", pd.Series(dtype="float64")), errors="coerce")
     return df
 
 def _make_timeseries(df: pd.DataFrame, freq="1min"):
+    if df.empty:
+        # ts 인덱스가 비어 있어도 DatetimeIndex가 되도록 생성
+        empty_idx = pd.DatetimeIndex([], tz="UTC")
+        ts = pd.DataFrame(index=empty_idx, columns=["attempts","failures","latency_ms"]).fillna(0)
+        bc = pd.DataFrame(columns=["channel","attempts","failures","failRate"])
+        return ts, bc
+    
     # 1) 시도/실패 시계열
-    g = df.set_index("ts").groupby(pd.Grouper(freq=freq))
+    # 1) ts를 tz-aware datetime으로 보정하고 인덱스로 세팅 + 정렬
+    df = df.copy()
+    df["ts"] = pd.to_datetime(df["ts"], errors="coerce", utc=True)
+    df = df.dropna(subset=["ts"])
+    df = df.set_index("ts").sort_index()
+
+    # (안전) result/latency 타입 보정
+    df["result"] = df["result"].astype("string")
+    df["latency_ms"] = pd.to_numeric(df.get("latency_ms", pd.Series(dtype="float64")), errors="coerce")
+
+    # 2) 분단위 집계
+    g = df.groupby(pd.Grouper(freq=freq))
     attempts = g.size().rename("attempts")
     failures = g.apply(lambda x: (x["result"]=="FAIL").sum()).rename("failures")
     latency = g["latency_ms"].mean().rename("latency_ms")
@@ -38,7 +65,9 @@ def _iforest_scores(ts: pd.DataFrame):
     """간단한 비지도 이상치 점수 (attempts/failures/fail_rate/latency)"""
     if ts.empty or len(ts) < 10:
         return pd.Series([0.0]*len(ts), index=ts.index)
-    feats = ts[["attempts","failures","fail_rate","latency_ms"]].to_numpy()
+    feats = ts[["attempts","failures","fail_rate","latency_ms"]].to_numpy(dtype=float)
+    # NaN/inf 방어
+    feats = np.nan_to_num(feats, copy=False, nan=0.0, posinf=1e9, neginf=-1e9)
     # 스케일링 없이도 대략 동작하도록 contamination 낮게
     model = IsolationForest(n_estimators=100, contamination=0.08, random_state=42)
     model.fit(feats)
