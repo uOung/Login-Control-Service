@@ -1,45 +1,56 @@
 # src/dashboard/streamlit_app.py
-import time
+import os
 from datetime import datetime
 
 import pandas as pd
 import requests
 import streamlit as st
-import os
-
 from dotenv import load_dotenv
+
 load_dotenv()  # .env 자동 로드
 
-API_BASE_URL = os.environ.get("API_BASE_URL", "http://127.0.0.1:8080").rstrip("/")
+# =========================
+# Settings
+# =========================
+ENV_API_BASE = os.environ.get("API_BASE_URL")
 
-st.set_page_config(page_title="Login Anomaly Monitor (Python + Azure AI)", layout="wide")
-st.title("🔎 Login Anomaly Monitor (Python + Azure AI Summary)")
+st.set_page_config(page_title="Login Control Dashboard", layout="wide")
+st.title("🔐 Login Control Dashboard")
 
 # ---- Controls ----
 with st.sidebar:
     st.header("Settings")
-    base = st.text_input("API Base URL", value=API_BASE_URL, help="예: http://127.0.0.1:8080")
-    interval = st.slider("Auto refresh (sec)", 3, 30, 7)
+    base = st.text_input("API Base URL", value=ENV_API_BASE or "", help="예: https://login-control.azurewebsites.net")
+    interval = st.slider("Auto refresh (sec)", 3, 60, 10)
     manual = st.button("🔄 Refresh now")
+
+# 자동 새로고침 (무한 루프/ sleep 대신)
+st.markdown(f"<meta http-equiv='refresh' content='{interval}'>", unsafe_allow_html=True)
 
 status = st.empty()
 kpi_area = st.empty()
 left, right = st.columns([2, 1])
 alerts_area = st.empty()
 summary_area = st.empty()
-footer = st.empty()
 
-def fetch(base_url: str) -> dict:
-    resp = requests.get(f"{base_url.rstrip('/')}/metrics", timeout=10)
-    resp.raise_for_status()
-    return resp.json()
+# =========================
+# API fetch
+# =========================
+@st.cache_data(ttl=10)
+def fetch_metrics_from_api(base_url: str):
+    if not base_url:
+        raise ValueError("API Base URL이 비어 있습니다. 사이드바에 입력하세요.")
+    url = f"{base_url.rstrip('/')}/metrics"
+    r = requests.get(url, timeout=10)
+    r.raise_for_status()
+    return r.json()
 
 def render(data: dict):
-    k = data.get("kpis", {})
-    attempts = k.get("attempts", 0)
-    failures = k.get("failures", 0)
-    fail_rate = k.get("failRate", 0.0)
-    high_risk = k.get("highRisk", 0)
+    k = data.get("kpis", {}) or {}
+    attempts = int(k.get("attempts", 0))
+    failures = int(k.get("failures", 0))
+    fail_rate = float(k.get("failRate", 0.0))
+    high_risk = int(k.get("highRisk", 0))
 
     # KPIs
     with kpi_area.container():
@@ -49,26 +60,36 @@ def render(data: dict):
         c3.metric("Fail Rate", f"{fail_rate*100:.1f}%")
         c4.metric("High-Risk (est.)", f"{high_risk:,}")
 
-    # Charts
+    # Charts: Timeseries
     with left:
         st.subheader("Attempts & Failures (last ~60m)")
         ts = pd.DataFrame(data.get("timeseries", []))
         if not ts.empty:
-            ts["ts"] = pd.to_datetime(ts["ts"])
-            ts = ts.set_index("ts")
-            st.line_chart(ts[["attempts", "failures"]])
+            ts["ts"] = pd.to_datetime(ts["ts"], utc=True, errors="coerce")
+            ts = ts.dropna(subset=["ts"]).set_index("ts").sort_index()
+            ycols = [c for c in ["attempts", "failures"] if c in ts.columns]
+            if ycols:
+                st.line_chart(ts[ycols])
+            else:
+                st.info("표시할 시계열 열이 없습니다.")
         else:
             st.info("No data yet. /login 호출로 데이터를 생성하세요.")
 
+    # Charts: By Channel
     with right:
         st.subheader("By Channel")
         bc = pd.DataFrame(data.get("byChannel", []))
         if not bc.empty:
-            st.bar_chart(bc.set_index("channel")[["attempts", "failures"]])
-            st.caption("Fail Rate (%)")
-            st.table(
-                bc[["channel", "failRate"]].assign(failRate=lambda d: (d["failRate"] * 100).round(1))
-            )
+            idxed = bc.set_index("channel")
+            cols = [c for c in ["attempts", "failures"] if c in idxed.columns]
+            if cols:
+                st.bar_chart(idxed[cols])
+            if "failRate" in bc.columns:
+                st.caption("Fail Rate (%)")
+                st.table(
+                    bc[["channel", "failRate"]]
+                    .assign(failRate=lambda d: (d["failRate"] * 100).round(1))
+                )
         else:
             st.info("No channel breakdown yet.")
 
@@ -90,25 +111,23 @@ def render(data: dict):
 
     # AI Summary
     with summary_area.container():
-        st.subheader("AI 요약 (Azure OpenAI)")
+        st.subheader("AI 요약 (from API)")
         summary = data.get("summary")
         if summary:
             st.markdown(summary)
         else:
-            st.caption("요약 없음 (환경변수 미설정 또는 데이터 부족/호출 실패)")
+            st.caption("요약 없음 (서버 측 환경변수 미설정 또는 데이터 부족/호출 실패)")
 
-# ---- Main loop ----
-while True:
-    try:
-        data = fetch(base)
-        render(data)
-        status.info(f"Last update: {datetime.now().strftime('%H:%M:%S')}")
-    except Exception as e:
-        status.error(f"Fetch error: {e}")
-
-    # manual refresh button clicked?
+# =========================
+# Run (single pass per rerun)
+# =========================
+try:
     if manual:
-        manual = False  # 한번 처리 후 초기화
-        continue
-
-    time.sleep(interval)
+        st.cache_data.clear()
+        manual = False
+    data = fetch_metrics_from_api(base)
+    render(data)
+    status.info(f"Last update: {datetime.now().strftime('%H:%M:%S')} · Source: {base or '(unset)'}")
+except Exception as e:
+    status.error(f"Fetch error: {e}")
+    st.stop()
