@@ -31,3 +31,6 @@ jobs:
           app-name: "streamlit-login-control"
           publish-profile: ${{ secrets.STREAMLIT_PUBLISH_PROFILE }}
           package: "app.zip"
+          
+      - name: Safety wait before deploy
+        run: sleep 20
